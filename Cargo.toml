@@ -1,0 +1,5 @@
+[package]
+
+name = "skyrim-alchemy"
+version = "0.0.1"
+authors = [ "Dyllon Gagnier <dyllongagnier@gmail.com>" ]
