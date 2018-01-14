@@ -3,3 +3,6 @@
 name = "skyrim-alchemy"
 version = "0.0.1"
 authors = [ "Dyllon Gagnier <dyllongagnier@gmail.com>" ]
+
+[dependencies]
+nalgebra = "0.13"
