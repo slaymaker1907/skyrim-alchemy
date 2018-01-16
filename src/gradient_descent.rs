@@ -25,13 +25,17 @@ pub fn solve_iter(a: MatrixN<f64, Dynamic>, b: &DynVec) -> DynVec {
 
 pub fn optimize<T: Gradient>(gradient: &T, mut start: VectorN<f64, Dynamic>) -> VectorN<f64, Dynamic> {
     let rate = 1.0;
+    let mut last_grad = f64::MAX;
     // TODO: Add in more sophisticated stoping condition.
     loop {
         let mut grad = gradient.gradient(&start);
-        if grad.norm() < 1e-2 {
+        let norm = grad.norm();
+        println!("Gradient norm: {}", norm);
+        if last_grad - norm < 1e-2 {
             break;
+        } else {
+            last_grad = norm;
         }
-        println!("Gradient norm: {}", grad.norm());
         let hess = gradient.hessian(&start);
         grad = solve_iter(hess, &grad);
         // let svd = hess.svd(true, true);

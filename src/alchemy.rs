@@ -272,8 +272,7 @@ impl EntropyOptimizer {
     }
 }
 
-const MULT: f64 = 1000.0;
-
+const MULT: f64 = 1.0;
 
 struct EntropyGradient {
     var_meaning: Vec<VariableType>

@@ -15,6 +15,6 @@ fn main() {
     contras.insert(EntropyConstraint::DoubleNeq(1, 2));
     let optimizer = EntropyOptimizer{ varc:3, k: 25, contras};
     let best = optimizer.optimize();
-    println!("{}", best);
+    // println!("{}", best);
     println!("{}", best.entropy());
 }
