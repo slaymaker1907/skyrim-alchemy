@@ -1,7 +1,7 @@
 use gradient_descent;
 use nalgebra::{MatrixN, Dynamic, VectorN};
 use std::fmt::{Display, Formatter};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt;
 
 type DynMatrix = MatrixN<f64, Dynamic>;
@@ -76,33 +76,46 @@ struct PartialLagrangian {
 }
 
 impl EntropyOptimizer {
+    fn required_joints(&self) -> Vec<(usize, usize)>  {
+        // Remove joint probabilities where possible.
+        let mut required_joints: Vec<(usize, usize)> = Vec::new();
+        for &contra in self.contras.iter() {
+            if let EntropyConstraint::DoubleNeq(first, second) = contra {
+                required_joints.push((first, second));
+            }
+        }
+
+        return required_joints;
+    }
+
     pub fn optimize(&self) -> OptimizationResult {
         let mut var_meaning: Vec<VariableType> = Vec::new();
         let mut lagrangians: Vec<Vec<usize>> = Vec::new();
         let mut partials: HashMap<PartialLagrangian, Vec<usize>> = HashMap::new();
-        for n1 in 0..self.varc {
-            for n2 in (n1+1)..self.varc {
-                let mut sum_to_one: Vec<usize> = Vec::new();
-                for k1 in 0..self.k {
-                    for k2 in 0..self.k {
-                        if !self.is_constrained(n1, k1, n2, k2) {
-                            let var1 = VarAndValue{ var: n1, value: k1 };
-                            let var2 = VarAndValue{ var: n2, value: k2 };
-                            let current_pos = var_meaning.len();
-                            partials.entry(PartialLagrangian{ given: var1, free: var2.var})
-                                .or_insert_with(|| Vec::new())
-                                .push(current_pos);
-                            partials.entry(PartialLagrangian{ given: var2, free: var1.var})
-                                .or_insert_with(|| Vec::new())
-                                .push(current_pos);
-                            sum_to_one.push(var_meaning.len());
-                            var_meaning.push(BaseVariable{ var1, var2 , lagrangians: Vec::new(), neg_lags: Vec::new()});
-                        }
+        let required_joints = self.required_joints();
+        let mentioned: HashSet<usize> = required_joints.iter().flat_map(|&(one, two)| vec![one, two]).collect();
+
+        for &(n1, n2) in required_joints.iter() {
+            let mut sum_to_one: Vec<usize> = Vec::new();
+            for k1 in 0..self.k {
+                for k2 in 0..self.k {
+                    if !self.is_constrained(n1, k1, n2, k2) {
+                        let var1 = VarAndValue{ var: n1, value: k1 };
+                        let var2 = VarAndValue{ var: n2, value: k2 };
+                        let current_pos = var_meaning.len();
+                        partials.entry(PartialLagrangian{ given: var1, free: var2.var})
+                            .or_insert_with(|| Vec::new())
+                            .push(current_pos);
+                        partials.entry(PartialLagrangian{ given: var2, free: var1.var})
+                            .or_insert_with(|| Vec::new())
+                            .push(current_pos);
+                        sum_to_one.push(var_meaning.len());
+                        var_meaning.push(BaseVariable{ var1, var2 , lagrangians: Vec::new(), neg_lags: Vec::new()});
                     }
                 }
-
-                lagrangians.push(sum_to_one);
             }
+
+            lagrangians.push(sum_to_one);
         }
 
         for lag in lagrangians {
@@ -113,6 +126,31 @@ impl EntropyOptimizer {
                 }
             }
             var_meaning.push(Lagrangian{ sum_to_one: lag });
+        }
+
+        for n in 0..self.varc {
+            if !mentioned.contains(&n) {
+                let variables: Vec<VarAndValue> = Vec::new();
+                for k in 0..self.k {
+                    let varval = VarAndValue{ var: n, value: k };
+                    let contra = EntropyConstraint::SingleNeq(varval);
+                    if !self.contras.contains(&contra) {
+                        variables.push(varval);
+                    }
+                }
+
+                let sum_to_one: Vec<usize> = Vec::new();
+                let start = var_meaning.len();
+                for i in start..(start+variables.len()) {
+                    sum_to_one.push(i);
+                }
+
+                let lagind = start + variables.len();
+                for var in variables {
+                    var_meaning.push(SingleVariable{ var, lagrangian: lagind });
+                }
+                var_meaning.push(Lagrangian{ sum_to_one });
+            }
         }
 
         for n1 in 0..self.varc {
@@ -189,11 +227,12 @@ const MULT: f64 = 1.0;
 #[derive(Debug, Clone)]
 enum VariableType {
     BaseVariable{ var1: VarAndValue, var2: VarAndValue, lagrangians: Vec<usize>, neg_lags: Vec<usize> },
+    SingleVariable{ var: VarAndValue, lagrangian: usize},
     Lagrangian{ sum_to_one: Vec<usize> },
     EquivalentSums(Vec<usize>, Vec<usize>)
 }
 
-use self::VariableType::{BaseVariable, Lagrangian, EquivalentSums};
+use self::VariableType::{BaseVariable, Lagrangian, EquivalentSums, SingleVariable};
 
 struct EntropyGradient {
     var_meaning: Vec<VariableType>
@@ -297,7 +336,7 @@ pub struct VarAndValue {
     pub value: usize
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum EntropyConstraint {
     DoubleNeq(usize, usize),
     SingleNeq(VarAndValue)
