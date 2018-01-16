@@ -61,7 +61,6 @@ impl Display for OptimizationResult {
 
 impl OptimizationResult {
     pub fn entropy(&self) -> f64 {
-        let zero: f64 = 0.0;
         let summ: f64 = self.distribution
             .values()
             .filter(|&&val| val > 0.0)
@@ -142,7 +141,7 @@ impl EntropyOptimizer {
             if mentioned.contains(&n) {
                 continue;
             }
-            let variables: Vec<VarAndValue> = Vec::new();
+            let mut variables: Vec<VarAndValue> = Vec::new();
             for k in 0..self.k {
                 let varval = VarAndValue{ var: n, value: k };
                 let contra = EntropyConstraint::SingleNeq(varval);
@@ -151,7 +150,7 @@ impl EntropyOptimizer {
                 }
             }
 
-            let sum_to_one: Vec<usize> = Vec::new();
+            let mut sum_to_one: Vec<usize> = Vec::new();
             let start = var_meaning.len();
             for i in start..(start+variables.len()) {
                 sum_to_one.push(i);
@@ -212,7 +211,7 @@ impl EntropyOptimizer {
         let start = DynVector::from_element(size, 0.5);
         let result = gradient_descent::optimize(&gradient, start);
 
-        let distribution: HashMap<VarAndValue, f64> = HashMap::new();
+        let mut distribution: HashMap<VarAndValue, f64> = HashMap::new();
         for n in 0..self.varc {
             for k in 0..self.k {
                 let varval = VarAndValue{ var: n, value: k };
@@ -238,7 +237,7 @@ impl EntropyOptimizer {
                             }
                         })
                         .map(|(i, _)| result[i]).sum();
-                    distribution[&varval] = probability;
+                    distribution.insert(varval, probability);
                 } else {
                     let probability = var_meaning.iter().enumerate().filter(|&(_, meaning)| {
                         return if let &SingleVariable{ var, .. } = meaning {
@@ -247,7 +246,7 @@ impl EntropyOptimizer {
                             false
                         };
                     }).map(|(i, _)| i).next().map(|index| result[index]);
-                    distribution[&varval] = probability.unwrap_or(0.0);
+                    distribution.insert(varval, probability.unwrap_or(0.0));
                 }
             }
         }
@@ -273,7 +272,7 @@ impl EntropyOptimizer {
     }
 }
 
-const MULT: f64 = 1.0;
+const MULT: f64 = 1000.0;
 
 
 struct EntropyGradient {
@@ -291,7 +290,7 @@ impl gradient_descent::Gradient for EntropyGradient {
                     let neg_sum: f64 = neg_lags.iter().map(|&i2| x[i2]).sum();
                     result[i] = prob_part + lag_sum - neg_sum;
                 },
-                &SingleVariable{ var, lagrangian } => {
+                &SingleVariable{ lagrangian, .. } => {
                     let prob_part = MULT * (x[i].ln() + 1.0);
                     result[i] = prob_part + x[lagrangian];
                 },
