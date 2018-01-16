@@ -7,11 +7,45 @@ use std::fmt;
 type DynMatrix = MatrixN<f64, Dynamic>;
 type DynVector = VectorN<f64, Dynamic>;
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub struct VarAndValue {
+    pub var: usize,
+    pub value: usize
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum EntropyConstraint {
+    DoubleNeq(usize, usize),
+    SingleNeq(VarAndValue)
+}
+
+#[derive(Debug, Clone)]
+enum VariableType {
+    BaseVariable{ var1: VarAndValue, var2: VarAndValue, lagrangians: Vec<usize>, neg_lags: Vec<usize> },
+    SingleVariable{ var: VarAndValue, lagrangian: usize},
+    Lagrangian{ sum_to_one: Vec<usize> },
+    EquivalentSums(Vec<usize>, Vec<usize>)
+}
+
+use self::VariableType::{BaseVariable, Lagrangian, EquivalentSums, SingleVariable};
+
 pub struct OptimizationResult {
     var_meaning: Vec<VariableType>,
     optimized: Vec<f64>,
     varc: usize,
     k: usize
+}
+
+#[derive(PartialEq, Eq, Hash)]
+struct PartialLagrangian {
+    given: VarAndValue,
+    free: usize
+}
+
+pub struct EntropyOptimizer {
+    pub varc: usize,
+    pub k: usize,
+    pub contras: Vec<EntropyConstraint>
 }
 
 impl Display for OptimizationResult {
@@ -63,17 +97,7 @@ impl OptimizationResult {
     }
 }
 
-pub struct EntropyOptimizer {
-    pub varc: usize,
-    pub k: usize,
-    pub contras: Vec<EntropyConstraint>
-}
 
-#[derive(PartialEq, Eq, Hash)]
-struct PartialLagrangian {
-    given: VarAndValue,
-    free: usize
-}
 
 impl EntropyOptimizer {
     fn required_joints(&self) -> Vec<(usize, usize)>  {
@@ -224,15 +248,6 @@ impl EntropyOptimizer {
 
 const MULT: f64 = 1.0;
 
-#[derive(Debug, Clone)]
-enum VariableType {
-    BaseVariable{ var1: VarAndValue, var2: VarAndValue, lagrangians: Vec<usize>, neg_lags: Vec<usize> },
-    SingleVariable{ var: VarAndValue, lagrangian: usize},
-    Lagrangian{ sum_to_one: Vec<usize> },
-    EquivalentSums(Vec<usize>, Vec<usize>)
-}
-
-use self::VariableType::{BaseVariable, Lagrangian, EquivalentSums, SingleVariable};
 
 struct EntropyGradient {
     var_meaning: Vec<VariableType>
@@ -330,14 +345,3 @@ impl gradient_descent::Gradient for EntropyGradient {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-pub struct VarAndValue {
-    pub var: usize,
-    pub value: usize
-}
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-pub enum EntropyConstraint {
-    DoubleNeq(usize, usize),
-    SingleNeq(VarAndValue)
-}
