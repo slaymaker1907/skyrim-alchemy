@@ -22,12 +22,11 @@ pub enum EntropyConstraint {
 #[derive(Debug, Clone)]
 enum VariableType {
     BaseVariable{ var1: VarAndValue, var2: VarAndValue, lagrangians: Vec<usize>, neg_lags: Vec<usize> },
-    SingleVariable{ var: VarAndValue, lagrangian: usize},
     Lagrangian(Vec<usize>),
     EquivalentSums(Vec<usize>, Vec<usize>)
 }
 
-use self::VariableType::{BaseVariable, Lagrangian, EquivalentSums, SingleVariable};
+use self::VariableType::{BaseVariable, Lagrangian, EquivalentSums};
 
 pub struct OptimizationResult {
     distribution: HashMap<VarAndValue, f64>,
@@ -95,6 +94,7 @@ impl EntropyOptimizer {
         let mut partials: HashMap<PartialLagrangian, Vec<usize>> = HashMap::new();
         let required_joints = self.required_joints();
         let mentioned: HashSet<usize> = required_joints.iter().flat_map(|&(one, two)| vec![one, two]).collect();
+        let mut distribution: HashMap<VarAndValue, f64> = HashMap::new();
 
         fn add_partials(
             partials: &mut HashMap<PartialLagrangian, Vec<usize>>, 
@@ -137,6 +137,7 @@ impl EntropyOptimizer {
             var_meaning.push(Lagrangian(lag));
         }
 
+        // If no joints, can just assume uniform distribution!
         for n in 0..self.varc {
             if mentioned.contains(&n) {
                 continue;
@@ -150,17 +151,10 @@ impl EntropyOptimizer {
                 }
             }
 
-            let mut sum_to_one: Vec<usize> = Vec::new();
-            let start = var_meaning.len();
-            for i in start..(start+variables.len()) {
-                sum_to_one.push(i);
-            }
-
-            let lagind = start + variables.len();
+            let prob = 1.0 / (variables.len() as f64);
             for var in variables {
-                var_meaning.push(SingleVariable{ var, lagrangian: lagind });
+                distribution.insert(var, prob);
             }
-            var_meaning.push(Lagrangian(sum_to_one));
         }
 
         // Only need to check mentioned values for equivalencies.
@@ -211,7 +205,6 @@ impl EntropyOptimizer {
         let start = DynVector::from_element(size, 0.5);
         let result = gradient_descent::optimize(&gradient, start);
 
-        let mut distribution: HashMap<VarAndValue, f64> = HashMap::new();
         for n in 0..self.varc {
             for k in 0..self.k {
                 let varval = VarAndValue{ var: n, value: k };
@@ -238,15 +231,6 @@ impl EntropyOptimizer {
                         })
                         .map(|(i, _)| result[i]).sum();
                     distribution.insert(varval, probability);
-                } else {
-                    let probability = var_meaning.iter().enumerate().filter(|&(_, meaning)| {
-                        return if let &SingleVariable{ var, .. } = meaning {
-                            var == varval
-                        } else {
-                            false
-                        };
-                    }).map(|(i, _)| i).next().map(|index| result[index]);
-                    distribution.insert(varval, probability.unwrap_or(0.0));
                 }
             }
         }
@@ -288,10 +272,6 @@ impl gradient_descent::Gradient for EntropyGradient {
                     let lag_sum: f64 = lagrangians.iter().map(|&i2| x[i2]).sum();
                     let neg_sum: f64 = neg_lags.iter().map(|&i2| x[i2]).sum();
                     result[i] = prob_part + lag_sum - neg_sum;
-                },
-                &SingleVariable{ lagrangian, .. } => {
-                    let prob_part = MULT * (x[i].ln() + 1.0);
-                    result[i] = prob_part + x[lagrangian];
                 },
                 &Lagrangian(ref sum_to_one ) => {
                     let sum: f64 = sum_to_one.iter().map(|&i2| x[i2]).sum();
@@ -336,30 +316,6 @@ impl gradient_descent::Gradient for EntropyGradient {
                             } else {
                                 0.0
                             }
-                        },
-                        _ => {
-                            return 0.0;
-                        }
-                    }
-                },
-                &SingleVariable{ lagrangian, .. } => {
-                    match self.var_meaning.get(column).unwrap() {
-                        &SingleVariable{ .. } => {
-                            return if row == column {
-                                MULT / x[row]
-                            } else {
-                                0.0
-                            };
-                        },
-                        &Lagrangian(_) => {
-                            return if column == lagrangian {
-                                1.0
-                            } else {
-                                0.0
-                            };
-                        },
-                        _ => {
-                            return 0.0;
                         }
                     }
                 },
