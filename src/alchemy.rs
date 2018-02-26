@@ -7,18 +7,6 @@ use std::fmt;
 type DynMatrix = MatrixN<f64, Dynamic>;
 type DynVector = VectorN<f64, Dynamic>;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-pub struct VarAndValue {
-    pub var: usize,
-    pub value: usize
-}
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-pub enum EntropyConstraint {
-    DoubleNeq(usize, usize),
-    SingleNeq(VarAndValue)
-}
-
 #[derive(Debug, Clone)]
 enum VariableType {
     BaseVariable{ var1: VarAndValue, var2: VarAndValue, lagrangians: Vec<usize>, neg_lags: Vec<usize> },

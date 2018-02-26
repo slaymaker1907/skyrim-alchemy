@@ -1,5 +1,6 @@
 mod gradient_descent;
 mod alchemy;
+mod solver;
 
 use std::collections::HashSet;
 
